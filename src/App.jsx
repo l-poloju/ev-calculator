@@ -1,473 +1,489 @@
-import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button.jsx'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx'
-import { Input } from '@/components/ui/input.jsx'
-import { Label } from '@/components/ui/label.jsx'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx'
-import { Badge } from '@/components/ui/badge.jsx'
-import { Calculator, Car, Battery, Zap, Gauge, Info, AlertTriangle, Download, FileText } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, AreaChart, Area } from 'recharts'
-import { 
-  calculateMotorPower, 
-  calculateEnergyConsumption, 
-  calculateVehicleDynamics, 
-  calculateFeasibilityScore,
-  generatePowerCurve 
-} from './lib/calculations.js'
-import ComparisonTool from './components/ComparisonTool.jsx'
-import ExportTool from './components/ExportTool.jsx'
-import './App.css'
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { Button } from './components/ui/button';
+import { Input } from './components/ui/input';
+import { Label } from './components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
+import { Separator } from './components/ui/separator';
+import { Badge } from './components/ui/badge';
+import { Info, Download, Calculator, BarChart3, Radar } from 'lucide-react';
+import PerformanceChart from './components/PerformanceChart';
+import ComparisonChart from './components/ComparisonChart';
+import RadarChart from './components/RadarChart';
+import FormulasSection from './components/FormulasSection';
 
 function App() {
-  // Input states
-  const [vehicleSpecs, setVehicleSpecs] = useState({
-    mass: 1500,
-    additionalWeight: 75,
-    topSpeed: 180,
-    acceleration0to100: 8.5,
-    range: 400,
-    tireRadius: 0.32,
-    dragCoefficient: 0.28,
-    frontalArea: 2.3,
-    terrainType: 'mixed',
-    auxiliaryLoad: 'normal'
-  })
+  const [vehicleData, setVehicleData] = useState({
+    batteryCapacity: 75, // kWh
+    motorPower: 250, // kW
+    weight: 2000, // kg
+    dragCoefficient: 0.25,
+    frontalArea: 2.5, // m²
+    efficiency: 85, // %
+    maxSpeed: 200, // km/h
+    acceleration: 5.5, // 0-100 km/h in seconds
+  });
 
-  // Calculated results
-  const [results, setResults] = useState({
-    totalWeight: 0,
-    motorPower: {},
-    energyConsumption: {},
-    vehicleDynamics: {},
-    feasibilityAnalysis: {},
-    powerCurveData: []
-  })
+  const [calculatedMetrics, setCalculatedMetrics] = useState({});
+  const [presetVehicles] = useState({
+    regular: {
+      name: "Regular Car",
+      batteryCapacity: 60,
+      motorPower: 150,
+      weight: 1800,
+      dragCoefficient: 0.28,
+      frontalArea: 2.3,
+      efficiency: 80,
+      maxSpeed: 180,
+      acceleration: 7.2,
+    },
+    sport: {
+      name: "Sport Car",
+      batteryCapacity: 100,
+      motorPower: 400,
+      weight: 2200,
+      dragCoefficient: 0.22,
+      frontalArea: 2.1,
+      efficiency: 88,
+      maxSpeed: 250,
+      acceleration: 3.5,
+    },
+    suv: {
+      name: "Electric SUV",
+      batteryCapacity: 95,
+      motorPower: 300,
+      weight: 2500,
+      dragCoefficient: 0.32,
+      frontalArea: 2.8,
+      efficiency: 82,
+      maxSpeed: 200,
+      acceleration: 6.0,
+    }
+  });
 
-  // Calculate results whenever inputs change
+  // Calculate performance metrics
   useEffect(() => {
-    calculateResults()
-  }, [vehicleSpecs])
+    const calculateMetrics = (data) => {
+      const { batteryCapacity, motorPower, weight, dragCoefficient, frontalArea, efficiency, maxSpeed, acceleration } = data;
+      
+      // Range calculation (simplified but more realistic)
+      const speed = 80; // km/h reference speed
+      const speedMs = speed / 3.6; // convert to m/s
+      const dragForce = 0.5 * 1.225 * dragCoefficient * frontalArea * Math.pow(speedMs, 2); // N
+      const rollingForce = weight * 9.81 * 0.01; // N (assuming rolling resistance coefficient of 0.01)
+      const totalForce = dragForce + rollingForce; // N
+      const powerRequired = totalForce * speedMs / 1000; // kW
+      const energyConsumption = powerRequired / (efficiency / 100); // kW accounting for efficiency
+      const range = (batteryCapacity / energyConsumption) * speed; // km
+      
+      // Power-to-weight ratio
+      const powerToWeight = motorPower / weight * 1000; // W/kg
+      
+      // Energy efficiency
+      const energyEfficiency = batteryCapacity / range * 100; // Wh/km
+      
+      // Torque estimation (simplified)
+      const estimatedTorque = motorPower * 9549 / 6000; // Nm (assuming 6000 rpm)
+      
+      return {
+        range: Math.round(range),
+        powerToWeight: Math.round(powerToWeight),
+        energyEfficiency: Math.round(energyEfficiency),
+        estimatedTorque: Math.round(estimatedTorque),
+        topSpeed: maxSpeed,
+        acceleration: acceleration,
+      };
+    };
 
-  const calculateResults = () => {
-    const totalWeight = vehicleSpecs.mass + vehicleSpecs.additionalWeight
-    
-    // Calculate motor power requirements
-    const motorPower = calculateMotorPower({
-      mass: totalWeight,
-      topSpeed: vehicleSpecs.topSpeed,
-      acceleration0to100: vehicleSpecs.acceleration0to100,
-      dragCoefficient: vehicleSpecs.dragCoefficient,
-      frontalArea: vehicleSpecs.frontalArea,
-      terrainType: vehicleSpecs.terrainType,
-      tireRadius: vehicleSpecs.tireRadius
-    })
-
-    // Calculate energy consumption
-    const energyConsumption = calculateEnergyConsumption({
-      mass: totalWeight,
-      dragCoefficient: vehicleSpecs.dragCoefficient,
-      frontalArea: vehicleSpecs.frontalArea,
-      terrainType: vehicleSpecs.terrainType,
-      range: vehicleSpecs.range,
-      auxiliaryLoad: vehicleSpecs.auxiliaryLoad
-    })
-
-    // Calculate vehicle dynamics
-    const vehicleDynamics = calculateVehicleDynamics({
-      mass: totalWeight,
-      tireRadius: vehicleSpecs.tireRadius,
-      dragCoefficient: vehicleSpecs.dragCoefficient,
-      frontalArea: vehicleSpecs.frontalArea,
-      topSpeed: vehicleSpecs.topSpeed,
-      acceleration0to100: vehicleSpecs.acceleration0to100,
-      requiredPower: motorPower.requiredPower
-    })
-
-    // Calculate feasibility score
-    const feasibilityAnalysis = calculateFeasibilityScore(
-      {
-        requiredPower: motorPower.requiredPower,
-        batteryCapacity: energyConsumption.batteryCapacity,
-        consumptionWhKm: energyConsumption.consumptionWhKm
-      },
-      {
-        mass: totalWeight,
-        acceleration0to100: vehicleSpecs.acceleration0to100,
-        dragCoefficient: vehicleSpecs.dragCoefficient,
-        range: vehicleSpecs.range,
-        additionalWeight: vehicleSpecs.additionalWeight
-      }
-    )
-
-    // Generate power curve data
-    const powerCurveData = generatePowerCurve({
-      mass: totalWeight,
-      dragCoefficient: vehicleSpecs.dragCoefficient,
-      frontalArea: vehicleSpecs.frontalArea,
-      terrainType: vehicleSpecs.terrainType,
-      topSpeed: vehicleSpecs.topSpeed
-    })
-
-    setResults({
-      totalWeight,
-      motorPower,
-      energyConsumption,
-      vehicleDynamics,
-      feasibilityAnalysis,
-      powerCurveData
-    })
-  }
+    setCalculatedMetrics(calculateMetrics(vehicleData));
+  }, [vehicleData]);
 
   const handleInputChange = (field, value) => {
-    setVehicleSpecs(prev => ({
+    setVehicleData(prev => ({
       ...prev,
-      [field]: field === 'terrainType' || field === 'auxiliaryLoad' ? value : (parseFloat(value) || 0)
-    }))
-  }
+      [field]: parseFloat(value) || 0
+    }));
+  };
 
-  const getFeasibilityColor = (score) => {
-    if (score >= 80) return 'bg-green-500'
-    if (score >= 60) return 'bg-yellow-500'
-    return 'bg-red-500'
-  }
+  const loadPreset = (presetKey) => {
+    setVehicleData(presetVehicles[presetKey]);
+  };
 
-  const getFeasibilityText = (rating) => {
-    return rating || 'Unknown'
-  }
+  const exportData = (format) => {
+    const exportData = {
+      vehicleData,
+      calculatedMetrics,
+      timestamp: new Date().toISOString()
+    };
+
+    if (format === 'json') {
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ev-calculator-data.json';
+      a.click();
+    } else if (format === 'csv') {
+      const csvData = [
+        ['Metric', 'Value', 'Unit'],
+        ['Battery Capacity', vehicleData.batteryCapacity, 'kWh'],
+        ['Motor Power', vehicleData.motorPower, 'kW'],
+        ['Weight', vehicleData.weight, 'kg'],
+        ['Drag Coefficient', vehicleData.dragCoefficient, ''],
+        ['Frontal Area', vehicleData.frontalArea, 'm²'],
+        ['Efficiency', vehicleData.efficiency, '%'],
+        ['Max Speed', vehicleData.maxSpeed, 'km/h'],
+        ['Acceleration (0-100)', vehicleData.acceleration, 's'],
+        ['Range', calculatedMetrics.range, 'km'],
+        ['Power-to-Weight', calculatedMetrics.powerToWeight, 'W/kg'],
+        ['Energy Efficiency', calculatedMetrics.energyEfficiency, 'Wh/km'],
+        ['Estimated Torque', calculatedMetrics.estimatedTorque, 'Nm'],
+      ].map(row => row.join(',')).join('\n');
+
+      const blob = new Blob([csvData], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ev-calculator-data.csv';
+      a.click();
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Calculator className="h-10 w-10 text-blue-600" />
-            <h1 className="text-4xl font-bold text-gray-900">Advanced EV Calculator</h1>
+    <TooltipProvider>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-2">
+              <Calculator className="h-8 w-8 text-primary" />
+              EV Calculator
+            </h1>
+            <p className="text-lg text-gray-600">
+              Professional Electric Vehicle Performance Analysis Tool
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Intuitive for beginners, powerful for professionals
+            </p>
           </div>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Estimate key performance and design parameters for electric vehicles based on technical specifications
-          </p>
-        </div>
 
-        <Tabs defaultValue="calculator" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="calculator" className="flex items-center gap-2">
-              <Calculator className="h-4 w-4" />
-              Calculator
-            </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex items-center gap-2">
-              <Gauge className="h-4 w-4" />
-              Analysis
-            </TabsTrigger>
-            <TabsTrigger value="compare" className="flex items-center gap-2">
-              <Car className="h-4 w-4" />
-              Compare
-            </TabsTrigger>
-          </TabsList>
+          <Tabs defaultValue="calculator" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="calculator">Calculator</TabsTrigger>
+              <TabsTrigger value="comparison">Comparison</TabsTrigger>
+              <TabsTrigger value="analysis">Analysis</TabsTrigger>
+              <TabsTrigger value="formulas">How It Works</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="calculator" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Input Panel */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Car className="h-5 w-5" />
-                    Vehicle Specifications
-                  </CardTitle>
-                  <CardDescription>
-                    Enter the technical specifications of your electric vehicle
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="mass">Vehicle Mass (kg)</Label>
-                      <Input
-                        id="mass"
-                        type="number"
-                        value={vehicleSpecs.mass}
-                        onChange={(e) => handleInputChange('mass', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="additionalWeight">Additional Weight (kg)</Label>
-                      <Input
-                        id="additionalWeight"
-                        type="number"
-                        value={vehicleSpecs.additionalWeight}
-                        onChange={(e) => handleInputChange('additionalWeight', e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="topSpeed">Top Speed (km/h)</Label>
-                      <Input
-                        id="topSpeed"
-                        type="number"
-                        value={vehicleSpecs.topSpeed}
-                        onChange={(e) => handleInputChange('topSpeed', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="acceleration0to100">0-100 km/h (seconds)</Label>
-                      <Input
-                        id="acceleration0to100"
-                        type="number"
-                        step="0.1"
-                        value={vehicleSpecs.acceleration0to100}
-                        onChange={(e) => handleInputChange('acceleration0to100', e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="range">Range (km)</Label>
-                      <Input
-                        id="range"
-                        type="number"
-                        value={vehicleSpecs.range}
-                        onChange={(e) => handleInputChange('range', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="tireRadius">Tire Radius (m)</Label>
-                      <Input
-                        id="tireRadius"
-                        type="number"
-                        step="0.01"
-                        value={vehicleSpecs.tireRadius}
-                        onChange={(e) => handleInputChange('tireRadius', e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="dragCoefficient">Drag Coefficient</Label>
-                      <Input
-                        id="dragCoefficient"
-                        type="number"
-                        step="0.01"
-                        value={vehicleSpecs.dragCoefficient}
-                        onChange={(e) => handleInputChange('dragCoefficient', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="frontalArea">Frontal Area (m²)</Label>
-                      <Input
-                        id="frontalArea"
-                        type="number"
-                        step="0.1"
-                        value={vehicleSpecs.frontalArea}
-                        onChange={(e) => handleInputChange('frontalArea', e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="terrainType">Terrain Type</Label>
-                      <Select value={vehicleSpecs.terrainType} onValueChange={(value) => handleInputChange('terrainType', value)}>
-                        <SelectTrigger>
-                          <SelectValue />
+            {/* Calculator Tab */}
+            <TabsContent value="calculator" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Input Section */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Calculator className="h-5 w-5" />
+                      Vehicle Parameters
+                    </CardTitle>
+                    <div className="flex gap-2">
+                      <Select onValueChange={loadPreset}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Load preset..." />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="urban">Urban</SelectItem>
-                          <SelectItem value="highway">Highway</SelectItem>
-                          <SelectItem value="mixed">Mixed</SelectItem>
-                          <SelectItem value="offroad">Off-road</SelectItem>
+                          <SelectItem value="regular">Regular Car</SelectItem>
+                          <SelectItem value="sport">Sport Car</SelectItem>
+                          <SelectItem value="suv">Electric SUV</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div>
-                      <Label htmlFor="auxiliaryLoad">Auxiliary Load</Label>
-                      <Select value={vehicleSpecs.auxiliaryLoad} onValueChange={(value) => handleInputChange('auxiliaryLoad', value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="normal">Normal</SelectItem>
-                          <SelectItem value="high">High (A/C, Heating)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Results Panel */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5" />
-                    Calculated Results
-                  </CardTitle>
-                  <CardDescription>
-                    Estimated performance parameters based on your specifications
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-blue-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Total Weight</div>
-                      <div className="text-2xl font-bold text-blue-600">{results.totalWeight} kg</div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Required Power</div>
-                      <div className="text-2xl font-bold text-green-600">{results.motorPower.requiredPower || 0} kW</div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-purple-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Required Torque</div>
-                      <div className="text-2xl font-bold text-purple-600">{results.motorPower.requiredTorque || 0} Nm</div>
-                    </div>
-                    <div className="p-4 bg-orange-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Battery Capacity</div>
-                      <div className="text-2xl font-bold text-orange-600">{results.energyConsumption.batteryCapacity || 0} kWh</div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-red-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Energy Consumption</div>
-                      <div className="text-2xl font-bold text-red-600">{results.energyConsumption.consumptionWhKm || 0} Wh/km</div>
-                    </div>
-                    <div className="p-4 bg-indigo-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Power-to-Weight</div>
-                      <div className="text-2xl font-bold text-indigo-600">{results.feasibilityAnalysis.powerToWeight || 0} W/kg</div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm text-gray-600">Feasibility Score</div>
-                      <Badge className={`${getFeasibilityColor(results.feasibilityAnalysis.score || 0)} text-white`}>
-                        {getFeasibilityText(results.feasibilityAnalysis.rating)}
-                      </Badge>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full ${getFeasibilityColor(results.feasibilityAnalysis.score || 0)}`}
-                        style={{ width: `${results.feasibilityAnalysis.score || 0}%` }}
-                      ></div>
-                    </div>
-                    <div className="text-right text-sm text-gray-600 mt-1">{results.feasibilityAnalysis.score || 0}/100</div>
-                    
-                    {results.feasibilityAnalysis.issues && results.feasibilityAnalysis.issues.length > 0 && (
-                      <div className="mt-3">
-                        <div className="flex items-center gap-2 text-sm text-amber-600 mb-2">
-                          <AlertTriangle className="h-4 w-4" />
-                          <span className="font-medium">Issues to Consider:</span>
-                        </div>
-                        <ul className="text-xs text-gray-600 space-y-1">
-                          {results.feasibilityAnalysis.issues.map((issue, index) => (
-                            <li key={index}>• {issue}</li>
-                          ))}
-                        </ul>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Label className="flex items-center gap-1 cursor-help">
+                              Battery Capacity (kWh)
+                              <Info className="h-3 w-3" />
+                            </Label>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Total energy storage capacity of the battery pack</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Input
+                          type="number"
+                          value={vehicleData.batteryCapacity}
+                          onChange={(e) => handleInputChange('batteryCapacity', e.target.value)}
+                          step="0.1"
+                        />
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
 
-          <TabsContent value="analysis" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Power vs Speed Analysis</CardTitle>
-                  <CardDescription>Power requirements at different speeds</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={results.powerCurveData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="speed" label={{ value: 'Speed (km/h)', position: 'insideBottom', offset: -5 }} />
-                      <YAxis label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }} />
-                      <Tooltip />
-                      <Legend />
-                      <Line type="monotone" dataKey="power" stroke="#2563eb" strokeWidth={2} name="Power" />
-                      <Line type="monotone" dataKey="efficiency" stroke="#16a34a" strokeWidth={2} name="Efficiency %" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+                      <div className="space-y-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Label className="flex items-center gap-1 cursor-help">
+                              Motor Power (kW)
+                              <Info className="h-3 w-3" />
+                            </Label>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Maximum power output of the electric motor</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Input
+                          type="number"
+                          value={vehicleData.motorPower}
+                          onChange={(e) => handleInputChange('motorPower', e.target.value)}
+                          step="1"
+                        />
+                      </div>
 
+                      <div className="space-y-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Label className="flex items-center gap-1 cursor-help">
+                              Weight (kg)
+                              <Info className="h-3 w-3" />
+                            </Label>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Total vehicle weight including battery</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Input
+                          type="number"
+                          value={vehicleData.weight}
+                          onChange={(e) => handleInputChange('weight', e.target.value)}
+                          step="10"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Label className="flex items-center gap-1 cursor-help">
+                              Drag Coefficient
+                              <Info className="h-3 w-3" />
+                            </Label>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Aerodynamic drag coefficient (Cd)</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Input
+                          type="number"
+                          value={vehicleData.dragCoefficient}
+                          onChange={(e) => handleInputChange('dragCoefficient', e.target.value)}
+                          step="0.01"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Label className="flex items-center gap-1 cursor-help">
+                              Frontal Area (m²)
+                              <Info className="h-3 w-3" />
+                            </Label>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Cross-sectional area facing the airflow</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Input
+                          type="number"
+                          value={vehicleData.frontalArea}
+                          onChange={(e) => handleInputChange('frontalArea', e.target.value)}
+                          step="0.1"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Label className="flex items-center gap-1 cursor-help">
+                              Efficiency (%)
+                              <Info className="h-3 w-3" />
+                            </Label>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Overall drivetrain efficiency</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Input
+                          type="number"
+                          value={vehicleData.efficiency}
+                          onChange={(e) => handleInputChange('efficiency', e.target.value)}
+                          step="1"
+                          min="0"
+                          max="100"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Label className="flex items-center gap-1 cursor-help">
+                              Max Speed (km/h)
+                              <Info className="h-3 w-3" />
+                            </Label>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Maximum achievable speed</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Input
+                          type="number"
+                          value={vehicleData.maxSpeed}
+                          onChange={(e) => handleInputChange('maxSpeed', e.target.value)}
+                          step="5"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Label className="flex items-center gap-1 cursor-help">
+                              0-100 km/h (s)
+                              <Info className="h-3 w-3" />
+                            </Label>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Acceleration time from 0 to 100 km/h</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Input
+                          type="number"
+                          value={vehicleData.acceleration}
+                          onChange={(e) => handleInputChange('acceleration', e.target.value)}
+                          step="0.1"
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Results Section */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5" />
+                      Performance Metrics
+                    </CardTitle>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => exportData('json')}
+                        className="flex items-center gap-1"
+                      >
+                        <Download className="h-3 w-3" />
+                        JSON
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => exportData('csv')}
+                        className="flex items-center gap-1"
+                      >
+                        <Download className="h-3 w-3" />
+                        CSV
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                        <div className="text-2xl font-bold text-green-700">
+                          {calculatedMetrics.range || 0}
+                        </div>
+                        <div className="text-sm text-green-600">Range (km)</div>
+                      </div>
+                      
+                      <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="text-2xl font-bold text-blue-700">
+                          {calculatedMetrics.powerToWeight || 0}
+                        </div>
+                        <div className="text-sm text-blue-600">Power/Weight (W/kg)</div>
+                      </div>
+                      
+                      <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-200">
+                        <div className="text-2xl font-bold text-orange-700">
+                          {calculatedMetrics.energyEfficiency || 0}
+                        </div>
+                        <div className="text-sm text-orange-600">Efficiency (Wh/km)</div>
+                      </div>
+                      
+                      <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <div className="text-2xl font-bold text-purple-700">
+                          {calculatedMetrics.estimatedTorque || 0}
+                        </div>
+                        <div className="text-sm text-purple-600">Torque (Nm)</div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Top Speed:</span>
+                        <Badge variant="secondary">{vehicleData.maxSpeed} km/h</Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">0-100 km/h:</span>
+                        <Badge variant="secondary">{vehicleData.acceleration} s</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Performance Chart */}
               <Card>
                 <CardHeader>
                   <CardTitle>Performance Breakdown</CardTitle>
-                  <CardDescription>Key performance indicators</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={[
-                      { name: 'Power', value: results.motorPower.requiredPower || 0, unit: 'kW' },
-                      { name: 'Torque', value: (results.motorPower.requiredTorque || 0) / 10, unit: 'Nm (÷10)' },
-                      { name: 'Battery', value: results.energyConsumption.batteryCapacity || 0, unit: 'kWh' },
-                      { name: 'Consumption', value: (results.energyConsumption.consumptionWhKm || 0) / 10, unit: 'Wh/km (÷10)' },
-                      { name: 'Max Speed', value: (results.vehicleDynamics.maxTheoreticalSpeed || 0) / 10, unit: 'km/h (÷10)' },
-                      { name: 'Braking Dist', value: results.vehicleDynamics.brakingDistance || 0, unit: 'm' }
-                    ]}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#3b82f6" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <PerformanceChart data={calculatedMetrics} />
                 </CardContent>
               </Card>
-            </div>
+            </TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Info className="h-5 w-5" />
-                  Engineering Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <h4 className="font-semibold mb-2">Calculation Methodology:</h4>
-                    <ul className="space-y-1 text-gray-600">
-                      <li>• Rolling resistance: Crr × Weight × g</li>
-                      <li>• Air drag: 0.5 × ρ × Cd × A × v²</li>
-                      <li>• Power: (Forces × velocity) / efficiency</li>
-                      <li>• Torque: Power / angular velocity</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-2">Assumptions:</h4>
-                    <ul className="space-y-1 text-gray-600">
-                      <li>• Air density: 1.225 kg/m³</li>
-                      <li>• Motor efficiency: 85%</li>
-                      <li>• Rolling resistance varies by terrain</li>
-                      <li>• Constant acceleration assumption</li>
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Comparison Tab */}
+            <TabsContent value="comparison">
+              <ComparisonChart 
+                presetVehicles={presetVehicles}
+                currentVehicle={{ name: "Custom Vehicle", ...vehicleData }}
+              />
+            </TabsContent>
 
-            <ExportTool vehicleSpecs={vehicleSpecs} results={results} />
-          </TabsContent>
+            {/* Analysis Tab */}
+            <TabsContent value="analysis">
+              <RadarChart 
+                presetVehicles={presetVehicles}
+                currentVehicle={{ name: "Custom Vehicle", ...vehicleData }}
+              />
+            </TabsContent>
 
-          <TabsContent value="compare" className="space-y-6">
-            <ComparisonTool />
-          </TabsContent>
-        </Tabs>
+            {/* Formulas Tab */}
+            <TabsContent value="formulas">
+              <FormulasSection />
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Watermark */}
+        <div className="watermark">
+          l.poloju
+        </div>
       </div>
-    </div>
-  )
+    </TooltipProvider>
+  );
 }
 
-export default App
+export default App;
 
